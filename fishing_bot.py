@@ -6,6 +6,13 @@ import time
 import json
 import os
 
+# DPI Awareness for Windows
+try:
+    import ctypes
+    ctypes.windll.shcore.SetProcessDpiAwareness(1)
+except Exception:
+    pass
+
 # Disable PyAutoGUI fail-safe to prevent accidental stops, 
 # but keep it if you want to stop the bot by moving mouse to corner.
 pyautogui.FAILSAFE = True
@@ -22,6 +29,9 @@ class NTEFishingBot:
         self.green_upper = np.array([80, 255, 255])
         self.yellow_lower = np.array([20, 100, 100])
         self.yellow_upper = np.array([35, 255, 255])
+        
+        # Debugging
+        self.debug_counter = 0
 
     def load_config(self, path):
         if not os.path.exists(path):
@@ -36,9 +46,15 @@ class NTEFishingBot:
         img = np.array(self.sct.grab(monitor))
         return cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
 
-    def find_horizontal_center(self, frame, lower, upper):
+    def find_horizontal_center(self, frame, lower, upper, name="obj"):
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         mask = cv2.inRange(hsv, lower, upper)
+        
+        # Debug: Save mask occasionally to check if colors match
+        if self.debug_counter % 100 == 0:
+            cv2.imwrite(f"debug_mask_{name}.png", mask)
+            cv2.imwrite(f"debug_frame.png", frame)
+        
         moments = cv2.moments(mask)
         if moments["m00"] > 0:
             cx = int(moments["m10"] / moments["m00"])
@@ -52,8 +68,9 @@ class NTEFishingBot:
         self.state = "WAITING_FOR_BITE"
 
     def run(self):
-        print("Bot started. Press Ctrl+C to stop.")
+        print("Bot démarré. Appuyez sur Ctrl+C pour arrêter.")
         while True:
+            self.debug_counter += 1
             if self.state == "IDLE":
                 self.cast_line()
 
@@ -70,8 +87,8 @@ class NTEFishingBot:
 
             elif self.state == "FIGHTING":
                 frame = self.get_roi_frame()
-                green_center = self.find_horizontal_center(frame, self.green_lower, self.green_upper)
-                yellow_center = self.find_horizontal_center(frame, self.yellow_lower, self.yellow_upper)
+                green_center = self.find_horizontal_center(frame, self.green_lower, self.green_upper, "green")
+                yellow_center = self.find_horizontal_center(frame, self.yellow_lower, self.yellow_upper, "yellow")
 
                 if green_center is None:
                     # Bar disappeared, fight ended
